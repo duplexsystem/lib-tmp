@@ -1,0 +1,154 @@
+plugins {
+    id 'java-library'
+    id 'fabric-loom' version '0.10-SNAPSHOT'
+    id 'io.github.juuxel.loom-quiltflower-mini' version '1.1.0'
+    id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '7.1.0'
+}
+
+archivesBaseName = "${project.archives_base_name}-mc${project.minecraft_version}"
+group = project.maven_group
+
+allprojects {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    version = project.mod_version + "." + getVersionSuffix()
+
+    repositories {
+        maven { url 'https://jitpack.io' }
+    }
+
+    if (plugins.hasPlugin("fabric-loom")) {
+        loom {
+            shareRemapCaches = true
+        }
+    }
+    afterEvaluate {
+        if (plugins.hasPlugin("fabric-loom")) {
+            migrateMappings.configure {
+                outputDir = project.file("src/main/java")
+            }
+        }
+    }
+}
+
+afterEvaluate {
+    logger.lifecycle("Version String: ${version}")
+}
+
+loom {
+    //accessWidenerPath = file("src/main/resources/c2me.accesswidener")
+}
+
+configurations {
+    api.extendsFrom includeApi
+    implementation.extendsFrom shadowImpl
+    runtimeOnly.extendsFrom shadowRuntime
+}
+
+dependencies {
+    //to change the versions see the gradle.properties file
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    api "net.fabricmc:yarn:${project.yarn_mappings}:v2" // loom bug?
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+    includeApi project(":libs")
+    include project(":libs")
+    shadowImpl "com.ibm.async:asyncutil:${async_util_version}"
+    shadowImpl "com.electronwill.night-config:toml:${night_config_version}"
+    shadowImpl "org.threadly:threadly:${threadly_version}"
+
+    afterEvaluate {
+        project(":compatibility").subprojects.each {
+            shadowRuntime(it) {
+                transitive false
+            }
+        }
+    }
+
+    // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
+    // You may need to force-disable transitiveness on them.
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+// ensure that the encoding is set to UTF-8, no matter what the system default is
+// this fixes some edge cases with special characters not displaying correctly
+// see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
+}
+
+jar {
+    from "LICENSE"
+}
+
+shadowJar {
+    archiveClassifier = "all-dev"
+    configurations = [ project.configurations.shadowImpl, project.configurations.shadowRuntime ]
+}
+
+//noinspection UnnecessaryQualifiedReference
+task("remapShadowJar", type: net.fabricmc.loom.task.RemapJarTask, dependsOn: shadowJar) {
+    input = shadowJar.archiveFile
+    archiveFileName = shadowJar.archiveFileName.get().replaceAll("-dev\\.jar\$", ".jar")
+    addNestedDependencies = true
+    remapAccessWidener = true
+    project(":libs").afterEvaluate {
+        dependsOn(project(":libs").assemble)
+    }
+}
+
+assemble.dependsOn(remapShadowJar)
+
+// configure the maven publication
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            // add all the jars that should be included when publishing to maven
+            artifact(remapJar) {
+                builtBy remapJar
+            }
+        }
+    }
+
+    // select the repositories you want to publish to
+    repositories {
+        // uncomment to publish to the local maven
+        // mavenLocal()
+    }
+}
+
+String getVersionSuffix() {
+    def stdout = new ByteArrayOutputStream()
+    exec {
+        commandLine 'git', 'describe', '--tags', '--dirty', '--broken'
+        standardOutput = stdout
+    }
+    stdout = stdout.toString().strip()
+    def suffix = ""
+    if (stdout.endsWith("-dirty")) {
+        stdout = stdout.substring(0, stdout.length() - "-dirty".length())
+        suffix = "-dirty"
+    }
+    if (stdout.endsWith("-broken")) {
+        stdout = stdout.substring(0, stdout.length() - "-broken".length())
+        suffix = "-broken"
+    }
+    if (stdout.indexOf('-') < 0) {
+        return "0" + suffix;
+    }
+    def split = stdout.split('-')
+    return split[split.length - 2] + suffix
+}
+
+shadowJar {
+//    minimize()
+}

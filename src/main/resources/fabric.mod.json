@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "Lib",
+  "version": "${version}",
+  "name": "lib",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/Lib/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "com.ishland.lib.lib.client.LibClient"
+    ],
+    "main": [
+      "com.ishland.lib.lib.Lib"
+    ]
+  },
+  "mixins": [
+    "Lib.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=",
+    "minecraft": ""
+  }
+}
