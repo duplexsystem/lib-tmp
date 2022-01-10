@@ -53,11 +53,7 @@ dependencies {
     api "net.fabricmc:yarn:${project.yarn_mappings}:v2" // loom bug?
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-    includeApi project(":libs")
-    include project(":libs")
-    shadowImpl "com.ibm.async:asyncutil:${async_util_version}"
     shadowImpl "com.electronwill.night-config:toml:${night_config_version}"
-    shadowImpl "org.threadly:threadly:${threadly_version}"
 
     afterEvaluate {
         project(":compatibility").subprojects.each {
